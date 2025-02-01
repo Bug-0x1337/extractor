@@ -56,7 +56,7 @@ jobs:
           echo -e "12" | ./single_grep.sh  # Replace 1, 2, 3 with the actual integer inputs expected by your script
 
       - name: Upload report
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: report
           path: /home/runner/work/extractor/extractor/plugins_downloader/report_line_12.txt
@@ -76,7 +76,7 @@ jobs:
 
 
       - name: Upload report
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: report
           path: /home/runner/work/extractor/extractor/plugins_downloader/report_line_12.txt
