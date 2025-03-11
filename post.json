@@ -1,0 +1,13 @@
+{
+  "post_title": "Sample Post Title",
+  "post_content": "<p>This is a sample post content.</p><p>It includes some <strong>bold text</strong> and <em>italic text</em>.</p>",
+  "post_status": "publish",
+  "post_author": 1,
+  "post_type": "post",
+  "post_categories": [1, 2],
+  "post_tags": ["sample", "json", "wordpress"],
+  "meta_data": {
+    "custom_field_1": "Custom Value 1",
+    "custom_field_2": "Custom Value 2"
+  }
+}
