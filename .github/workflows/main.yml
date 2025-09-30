@@ -1,4 +1,4 @@
-name: Update EPG Data
+name: Update EPG Dat
 
 on:
   schedule:
