@@ -1,4 +1,4 @@
-name: Update EPG Data
+name: Update EPG Dat
 
 on:
   schedule:
@@ -12,25 +12,18 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v4
 
-    - name: Debug repo contents
-      run: |
-        echo "📂 Current working directory: $(pwd)"
-        echo "📂 Listing repo files..."
-        ls -R
-
     - name: Install dependencies
       run: |
         sudo apt-get update
         sudo apt-get install -y libpcap-dev
-        
         # Verify libpcap is installed
         dpkg -L libpcap-dev | grep pcap.h || true
 
     - name: Install required tools
       run: |
-        go version  # Show Go version (preinstalled)
+        go version   # Show Go version (comes preinstalled on ubuntu-latest)
         
-        # Install security tools
+        # Install ProjectDiscovery tools
         go install -v github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest
         go install -v github.com/projectdiscovery/httpx/cmd/httpx@latest
         go install -v github.com/projectdiscovery/nuclei/v2/cmd/nuclei@latest
@@ -41,6 +34,12 @@ jobs:
         
         # Update nuclei templates
         nuclei -update-templates
+
+    - name: Debug repo contents
+      run: |
+        echo "Current working directory: $(pwd)"
+        echo "Repo contents:"
+        ls -R
 
     - name: Load wildcards and run subfinder
       id: subdomain_discovery
@@ -71,18 +70,16 @@ jobs:
       id: live_hosts
       run: |
         echo "🌐 Finding live hosts..."
-        
-        domains_file="${{ github.workspace }}/targets/domains.txt"
-        
-        # Combine main domains and discovered subdomains
-        cat "$domains_file" scan_results/subdomains.txt | sort -u > scan_results/all_targets.txt
+
+        # Combine static domains + discovered subdomains
+        cat "${{ github.workspace }}/targets/domains.txt" scan_results/subdomains.txt | sort -u > scan_results/all_targets.txt
         
         echo "Total targets before httpx: $(wc -l < scan_results/all_targets.txt)"
-        
-        # Run httpx to find live hosts
+
+        # Run httpx
         httpx -l scan_results/all_targets.txt -silent -status-code -title -tech-detect -o scan_results/live_hosts.txt
-        
-        # Extract just the URLs for next steps
+
+        # Extract just the URLs
         awk '{print $1}' scan_results/live_hosts.txt > scan_results/live_urls.txt
         
         echo "live_host_count=$(wc -l < scan_results/live_urls.txt)" >> $GITHUB_OUTPUT
@@ -92,9 +89,9 @@ jobs:
       id: wordpress_detect
       run: |
         echo "📖 Fingerprinting WordPress servers..."
-        
-        # Ensure a WordPress detection template exists
-        cat > wordpress-detection.yaml << 'EOL'
+
+        # Create WordPress detection template
+        cat > wordpress-detection.yaml <<'EOL'
 id: wordpress-detect
 info:
   name: WordPress Detection
