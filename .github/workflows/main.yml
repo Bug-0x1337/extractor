@@ -6,15 +6,23 @@ on:
   workflow_dispatch:
 
 jobs:
- wordpress-hunter:
+  wordpress-hunter:
     runs-on: ubuntu-latest
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
 
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y libpcap-dev
+        
+        # Verify libpcap is installed
+        dpkg -L libpcap-dev | grep pcap.h || true
+
     - name: Install required tools
       run: |
-        # Install Go
+        # Show Go version (preinstalled on ubuntu-latest)
         go version
         
         # Install security tools
