@@ -41,28 +41,27 @@ jobs:
       id: subdomain_discovery
       run: |
         echo "🔍 Starting subdomain discovery..."
-        
-        # Create output directory
         mkdir -p scan_results
-        
-        # Run subfinder on each wildcard domain
-        if [ -f "${{ github.event.inputs.wildcards_file }}" ]; then
+
+        wildcards_file="targets/wildcards.txt"
+
+        if [ -f "$wildcards_file" ]; then
           while IFS= read -r wildcard; do
             if [ -n "$wildcard" ]; then
               echo "Running subfinder for: $wildcard"
               subfinder -d "$wildcard" -silent >> scan_results/subfinder_raw.txt
             fi
-          done < "${{ github.event.inputs.wildcards_file }}"
-          
-          # Remove duplicates and count
+          done < "$wildcards_file"
+
           sort -u scan_results/subfinder_raw.txt > scan_results/subdomains.txt
           echo "subdomain_count=$(wc -l < scan_results/subdomains.txt)" >> $GITHUB_OUTPUT
           echo "Discovered $(wc -l < scan_results/subdomains.txt) unique subdomains"
         else
-          echo "No wildcards file found, creating empty subdomains list"
+          echo "⚠️ No wildcards file found, creating empty subdomains list"
           touch scan_results/subdomains.txt
           echo "subdomain_count=0" >> $GITHUB_OUTPUT
         fi
+
 
     - name: Run httpx on subdomains to get live hosts
       id: live_hosts
