@@ -12,6 +12,12 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v4
 
+    - name: Debug repo contents
+      run: |
+        echo "📂 Current working directory: $(pwd)"
+        echo "📂 Listing repo files..."
+        ls -R
+
     - name: Install dependencies
       run: |
         sudo apt-get update
@@ -22,8 +28,7 @@ jobs:
 
     - name: Install required tools
       run: |
-        # Show Go version (preinstalled on ubuntu-latest)
-        go version
+        go version  # Show Go version (preinstalled)
         
         # Install security tools
         go install -v github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest
@@ -43,7 +48,7 @@ jobs:
         echo "🔍 Starting subdomain discovery..."
         mkdir -p scan_results
 
-        wildcards_file="targets/wildcards.txt"
+        wildcards_file="${{ github.workspace }}/targets/wildcards.txt"
 
         if [ -f "$wildcards_file" ]; then
           while IFS= read -r wildcard; do
@@ -55,21 +60,22 @@ jobs:
 
           sort -u scan_results/subfinder_raw.txt > scan_results/subdomains.txt
           echo "subdomain_count=$(wc -l < scan_results/subdomains.txt)" >> $GITHUB_OUTPUT
-          echo "Discovered $(wc -l < scan_results/subdomains.txt) unique subdomains"
+          echo "✅ Discovered $(wc -l < scan_results/subdomains.txt) unique subdomains"
         else
           echo "⚠️ No wildcards file found, creating empty subdomains list"
           touch scan_results/subdomains.txt
           echo "subdomain_count=0" >> $GITHUB_OUTPUT
         fi
 
-
     - name: Run httpx on subdomains to get live hosts
       id: live_hosts
       run: |
         echo "🌐 Finding live hosts..."
         
+        domains_file="${{ github.workspace }}/targets/domains.txt"
+        
         # Combine main domains and discovered subdomains
-        cat "${{ github.event.inputs.domains_file }}" scan_results/subdomains.txt | sort -u > scan_results/all_targets.txt
+        cat "$domains_file" scan_results/subdomains.txt | sort -u > scan_results/all_targets.txt
         
         echo "Total targets before httpx: $(wc -l < scan_results/all_targets.txt)"
         
@@ -77,15 +83,36 @@ jobs:
         httpx -l scan_results/all_targets.txt -silent -status-code -title -tech-detect -o scan_results/live_hosts.txt
         
         # Extract just the URLs for next steps
-        cat scan_results/live_hosts.txt | awk '{print $1}' > scan_results/live_urls.txt
+        awk '{print $1}' scan_results/live_hosts.txt > scan_results/live_urls.txt
         
         echo "live_host_count=$(wc -l < scan_results/live_urls.txt)" >> $GITHUB_OUTPUT
-        echo "Found $(wc -l < scan_results/live_urls.txt) live hosts"
+        echo "✅ Found $(wc -l < scan_results/live_urls.txt) live hosts"
 
     - name: Fingerprint for WordPress servers
       id: wordpress_detect
       run: |
         echo "📖 Fingerprinting WordPress servers..."
         
-        # Create WordPress detection template if it doesn't exist
+        # Ensure a WordPress detection template exists
         cat > wordpress-detection.yaml << 'EOL'
+id: wordpress-detect
+info:
+  name: WordPress Detection
+  author: github-actions
+  severity: info
+  description: Detect WordPress instances
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/wp-login.php"
+      - "{{BaseURL}}/wp-admin/"
+    matchers:
+      - type: word
+        words:
+          - "wp-content"
+          - "WordPress"
+EOL
+
+        nuclei -l scan_results/live_urls.txt -t wordpress-detection.yaml -o scan_results/wordpress_detected.txt
+        echo "✅ WordPress detection complete: $(wc -l < scan_results/wordpress_detected.txt) hits"
