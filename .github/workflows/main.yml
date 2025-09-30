@@ -1,4 +1,4 @@
-name: WordPress Bug Bounty Automation
+name: Update EPG Data
 
 on:
   schedule:
@@ -55,3 +55,30 @@ jobs:
           touch scan_results/subdomains.txt
           echo "subdomain_count=0" >> $GITHUB_OUTPUT
         fi
+
+    - name: Run httpx on subdomains to get live hosts
+      id: live_hosts
+      run: |
+        echo "🌐 Finding live hosts..."
+        
+        # Combine main domains and discovered subdomains
+        cat "${{ github.event.inputs.domains_file }}" scan_results/subdomains.txt | sort -u > scan_results/all_targets.txt
+        
+        echo "Total targets before httpx: $(wc -l < scan_results/all_targets.txt)"
+        
+        # Run httpx to find live hosts
+        httpx -l scan_results/all_targets.txt -silent -status-code -title -tech-detect -o scan_results/live_hosts.txt
+        
+        # Extract just the URLs for next steps
+        cat scan_results/live_hosts.txt | awk '{print $1}' > scan_results/live_urls.txt
+        
+        echo "live_host_count=$(wc -l < scan_results/live_urls.txt)" >> $GITHUB_OUTPUT
+        echo "Found $(wc -l < scan_results/live_urls.txt) live hosts"
+
+    - name: Fingerprint for WordPress servers
+      id: wordpress_detect
+      run: |
+        echo "📖 Fingerprinting WordPress servers..."
+        
+        # Create WordPress detection template if it doesn't exist
+        cat > wordpress-detection.yaml << 'EOL'
