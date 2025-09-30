@@ -1,82 +1,57 @@
-name: Execute Puppeteer Script and Generate Reported
+name: WordPress Bug Bounty Automation
 
 on:
-  push:
-    branches:
-      - main
+  schedule:
+    - cron: '0 * * * *'   # run every hour
   workflow_dispatch:
 
 jobs:
-  build:
-    runs-on: ubuntu-24.04
-
+ wordpress-hunter:
+    runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v2
+    - name: Checkout repository
+      uses: actions/checkout@v4
 
-      - name: Install dependencies for Puppeteer and Chrome
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            wget \
-            subversion \
-            git \
-            sudo \
-            ripgrep \
-            python3 \
-            python3-venv \
-            gnupg2 \
-            libnss3 \
-            libxss1 \
-            libx11-xcb1 \
-            libxcomposite1 \
-            libatk-bridge2.0-0 \
-            libatk1.0-0 \
-            libcups2 \
-            libdbus-1-3 \
-            libnspr4 \
-            libxrandr2 \
-            libxshmfence1 \
-            libgtk-3-0 \
-            fonts-liberation \
-            libappindicator3-1 \
-            libx11-dev \
-            libxrender-dev
-
-      - name: Clone repository
-        run: git clone https://github.com/d4rk5id3r/plugins_downloader
-
-      - name: Sleep for 10 Seconds
-        run: sleep 10
-
-      - name: Create Python virtual environment and install dependencies
-        run: |
-          cd plugins_downloader && pwd && pip install beautifulsoup4 && pip install requests && ls -la && sudo apt-get install ripgrep -y && chmod +x single_grep.sh && ls -la && python3 extractor.py && ls -la && \
-          # Provide user input for single_grep.sh using echo
-          echo -e "12" | ./single_grep.sh  # Replace 1, 2, 3 with the actual integer inputs expected by your script
-
-      - name: Upload report
-        uses: actions/upload-artifact@v4
-        with:
-          name: report
-          path: /home/runner/work/extractor/extractor/plugins_downloader/report_line_12.txt
-
-
-
-      - name: Remove all Plugin file after Extraction and Grepping
-        run: |
-          rm -rf extracted_plugins/*  && ls && pwd
-
+    - name: Install required tools
+      run: |
+        # Install Go
+        go version
         
-      - name: run on line 2
-        run: |
-         cd plugins_downloader && pwd && python3 extractor.py && ls -la && \
-         # Provide user input for single_grep1.sh using echo
-         echo -e "12" | ./single_grep.sh  # Replace 1, 2, 3 with the actual integer inputs expected by your script
+        # Install security tools
+        go install -v github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest
+        go install -v github.com/projectdiscovery/httpx/cmd/httpx@latest
+        go install -v github.com/projectdiscovery/nuclei/v2/cmd/nuclei@latest
+        go install -v github.com/projectdiscovery/naabu/v2/cmd/naabu@latest
+        
+        # Copy binaries to system path
+        sudo cp ~/go/bin/* /usr/local/bin/
+        
+        # Update nuclei templates
+        nuclei -update-templates
 
-
-      - name: Upload report
-        uses: actions/upload-artifact@v4
-        with:
-          name: report
-          path: /home/runner/work/extractor/extractor/plugins_downloader/report_line_12.txt
+    - name: Load wildcards and run subfinder
+      id: subdomain_discovery
+      run: |
+        echo "🔍 Starting subdomain discovery..."
+        
+        # Create output directory
+        mkdir -p scan_results
+        
+        # Run subfinder on each wildcard domain
+        if [ -f "${{ github.event.inputs.wildcards_file }}" ]; then
+          while IFS= read -r wildcard; do
+            if [ -n "$wildcard" ]; then
+              echo "Running subfinder for: $wildcard"
+              subfinder -d "$wildcard" -silent >> scan_results/subfinder_raw.txt
+            fi
+          done < "${{ github.event.inputs.wildcards_file }}"
+          
+          # Remove duplicates and count
+          sort -u scan_results/subfinder_raw.txt > scan_results/subdomains.txt
+          echo "subdomain_count=$(wc -l < scan_results/subdomains.txt)" >> $GITHUB_OUTPUT
+          echo "Discovered $(wc -l < scan_results/subdomains.txt) unique subdomains"
+        else
+          echo "No wildcards file found, creating empty subdomains list"
+          touch scan_results/subdomains.txt
+          echo "subdomain_count=0" >> $GITHUB_OUTPUT
+        fi
