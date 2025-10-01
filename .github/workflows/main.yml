@@ -53,8 +53,20 @@ jobs:
     - name: Fingerprint for Wordpress servers
       run: pwd  && cd Recon && pwd && nuclei -l live_websites.txt -t /home/runner/work/extractor/extractor/Recon/version-detect.yaml -o results.txt
 
+    - name: Extract clean WordPress URL list
+      run: cd Recon && cat results.txt | awk '{print $4}' | sort -u > wordpress_urls.txt  
+
+    - name: Enum Installed WordPress Plugins
+      run:  cd Recon && nuclei -l wordpress_urls.txt -t /home/runner/work/extractor/extractor/Recon/plugins.yaml -o installed_plugins.txt
+
+    - name: Enum Installed Wordpress themes
+      run: cd Recon && nuclei -l wordpress_urls.txt -t /home/runner/work/extractor/extractor/Recon/themes.yaml -o installed_themes.txt
+
     - name: Upload Reported
       uses: actions/upload-artifact@v4
       with:
         name: report
-        path: /home/runner/work/extractor/extractor/Recon/results.txt 
+        path: | 
+          /home/runner/work/extractor/extractor/Recon/wordpress_urls.txt
+          /home/runner/work/extractor/extractor/Recon/installed_plugins.txt
+          /home/runner/work/extractor/extractor/Recon/installed_themes.txt
