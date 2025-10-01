@@ -22,6 +22,7 @@ jobs:
 
     - name: Download and split wildcards
       run: |
+        pwd && ls
         # Download the file
         wget https://raw.githubusercontent.com/d4rk5id3r/Recon/refs/heads/main/wildcards.txt -O wildcards.txt
 
