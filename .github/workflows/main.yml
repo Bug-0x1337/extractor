@@ -20,24 +20,31 @@ jobs:
         # Verify libpcap is installed
         dpkg -L libpcap-dev | grep pcap.h || true
 
-    - name: Download wildcards
+    - name: Download and split wildcards
       run: |
-       wget https://raw.githubusercontent.com/d4rk5id3r/Recon/refs/heads/main/wildcards.txt -O wildcards.txt
-       # Count total lines
-          total_lines=$(wc -l < wildcards.txt)
-          echo "Total lines: $total_lines"
-          
-          # Calculate lines per file (rounded up)
-          per_file=$(( (total_lines + 4) / 5 ))
-          echo "Lines per file: $per_file"
-          
-          # Split into 5 files named data1.txt, data2.txt, ...
-          split -l $per_file -d --additional-suffix=.txt wildcards.txt data
-          
-          # Rename split files to data1.txt, data2.txt, ...
-          for i in {0..4}; do mv data0$i.txt data$((i+1)).txt; done
-          
-          ls -l wildcards*.txt
+        # Download the file
+        wget https://raw.githubusercontent.com/d4rk5id3r/Recon/refs/heads/main/wildcards.txt -O wildcards.txt
+
+        # Count total lines
+        total_lines=$(wc -l < wildcards.txt)
+        echo "Total lines: $total_lines"
+
+        # Calculate lines per file (rounded up to split into 5 files)
+        per_file=$(( (total_lines + 4) / 5 ))
+        echo "Lines per file: $per_file"
+
+        # Split into temporary files: part00.txt, part01.txt, ..., part04.txt
+        split -l "$per_file" -d --additional-suffix=.txt wildcards.txt part
+
+        # Rename part00.txt to wildcards1.txt, ..., part04.txt to wildcards5.txt
+        for i in {0..4}; do
+          num=$(printf "%02d" "$i")
+          mv "part${num}.txt" "wildcards$((i+1)).txt"
+        done
+
+        # List resulting files
+        ls -l wildcards*.txt
+
     
   deploy:
     runs-on: ubuntu-latest
