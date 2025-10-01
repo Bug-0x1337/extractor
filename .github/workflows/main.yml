@@ -61,6 +61,7 @@ jobs:
 
       - name: Update system Tools
         run: |
+          sudo apt-get remove -y man-db || true
           sudo apt-get update
           sudo apt-get install -y libpcap-dev curl
           dpkg -L libpcap-dev | grep pcap.h || true
