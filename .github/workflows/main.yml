@@ -30,6 +30,7 @@ jobs:
         go install -v github.com/projectdiscovery/httpx/cmd/httpx@latest
         go install -v github.com/projectdiscovery/nuclei/v2/cmd/nuclei@latest
         go install -v github.com/projectdiscovery/naabu/v2/cmd/naabu@latest
+        go install github.com/tomnomnom/httprobe@latest
         
         # Copy binaries to system path
         sudo cp ~/go/bin/* /usr/local/bin/
@@ -47,8 +48,8 @@ jobs:
       run:  cd Recon && pwd && ls -la && chmod +x wildcards.sh && ./wildcards.sh wildcards.txt subs-found.txt && cat subs-found.txt >> domains.txt && cat domains.txt
     
     - name: Probe domains with httpx
-      run: cd Recon && cat domains.txt | httpx -ports 80,443,8080,8000,8888 -threads 200 > subdomains_alive.txt 
-
+      run: cd Recon && cat domains.txt | httprobe > live_websites.txt
+      
     - name: Fingerprint for Wordpress servers
       run: pwd  && cd Recon && pwd
 
