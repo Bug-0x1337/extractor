@@ -22,7 +22,7 @@ jobs:
 
     - name: Download wildcards
       run: |
-       curl -o wildcards.txt https://raw.githubusercontent.com/d4rk5id3r/Recon/refs/heads/main/wildcards.txt
+       wget https://raw.githubusercontent.com/d4rk5id3r/Recon/refs/heads/main/wildcards.txt -O wildcards.txt
        # Count total lines
           total_lines=$(wc -l < data.txt)
           echo "Total lines: $total_lines"
