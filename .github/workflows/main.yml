@@ -12,61 +12,55 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v4
 
-    - name: Install dependencies
+    - name: Update system Tools
       run: |
         sudo apt-get update
-        sudo apt-get install -y libpcap-dev
+        sudo apt-get install -y libpcap-dev curl
         
         # Verify libpcap is installed
         dpkg -L libpcap-dev | grep pcap.h || true
 
-    - name: Install required tools
+    - name: Download wildcards
       run: |
-        # Show Go version (preinstalled on ubuntu-latest)
-        go version
-        
-        # Install security tools
-        go install -v github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest
-        go install -v github.com/projectdiscovery/httpx/cmd/httpx@latest
-        go install -v github.com/projectdiscovery/nuclei/v2/cmd/nuclei@latest
-        go install -v github.com/projectdiscovery/naabu/v2/cmd/naabu@latest
-        go install github.com/tomnomnom/httprobe@latest
-        
-        # Copy binaries to system path
-        sudo cp ~/go/bin/* /usr/local/bin/
-        
-        # Update nuclei templates
-        nuclei -update-templates
-
-    - name: Clone repository
-      run: git clone https://github.com/d4rk5id3r/Recon
-
-    - name: Sleep for 10 Seconds
-      run: sleep 10
-
-    - name: Load wildcards and run subfinder
-      run:  cd Recon && pwd && ls -la && chmod +x wildcards.sh && ./wildcards.sh wildcards.txt subs-found.txt
+       curl -o wildcards.txt https://raw.githubusercontent.com/d4rk5id3r/Recon/wildcards.txt
+       # Count total lines
+          total_lines=$(wc -l < data.txt)
+          echo "Total lines: $total_lines"
+          
+          # Calculate lines per file (rounded up)
+          per_file=$(( (total_lines + 4) / 5 ))
+          echo "Lines per file: $per_file"
+          
+          # Split into 5 files named data1.txt, data2.txt, ...
+          split -l $per_file -d --additional-suffix=.txt data.txt data
+          
+          # Rename split files to data1.txt, data2.txt, ...
+          for i in {0..4}; do mv data0$i.txt data$((i+1)).txt; done
+          
+          ls -l data*.txt
     
-    - name: Probe domains with httprobe
-      run: cd Recon && cat subs-found.txt | httprobe > live_websites.txt
-      
-    - name: Fingerprint for Wordpress servers
-      run: pwd  && cd Recon && pwd && nuclei -l live_websites.txt -t /home/runner/work/extractor/extractor/Recon/version-detect.yaml -o results.txt
+  deploy:
+    runs-on: ubuntu-latest
+    needs: wordpress-hunter
+    strategy:
+      matrix:
+        file: [data1.txt, data2.txt, data3.txt, data4.txt, data5.txt]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run tests
+        run: |
+          echo "Running tests with ${{ matrix.file }}..."
+          cat ${{ matrix.file }}
 
-    - name: Extract clean WordPress URL list
-      run: cd Recon && cat results.txt | awk '{print $4}' | sort -u > wordpress_urls.txt  
+      - name: Clone repository
+        run: git clone https://github.com/d4rk5id3r/Recon
 
-    - name: Enum Installed WordPress Plugins
-      run:  cd Recon && nuclei -l wordpress_urls.txt -t /home/runner/work/extractor/extractor/Recon/plugins.yaml -o installed_plugins.txt
+      - name: Sleep for 10 Seconds
+        run: sleep 10
 
-    - name: Enum Installed Wordpress themes
-      run: cd Recon && nuclei -l wordpress_urls.txt -t /home/runner/work/extractor/extractor/Recon/themes.yaml -o installed_themes.txt
+      - name: Load wildcards and run subfinder
+        run:  cd Recon && pwd && ls -la && chmod +x wildcards.sh && ./wildcards.sh ${{ matrix.file }} subs-found${{ matrix }}.txt
 
-    - name: Upload Reported
-      uses: actions/upload-artifact@v4
-      with:
-        name: report
-        path: | 
-          /home/runner/work/extractor/extractor/Recon/wordpress_urls.txt
-          /home/runner/work/extractor/extractor/Recon/installed_plugins.txt
-          /home/runner/work/extractor/extractor/Recon/installed_themes.txt
+      - name: Probe domains with httprobe
+        run: cd Recon && cat subs-found${{ matrix }}.txt | httprobe > live_websites.txt 
+    
