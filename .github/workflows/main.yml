@@ -2,51 +2,42 @@ name: Update EPG Dat
 
 on:
   schedule:
-    - cron: '0 * * * *'   # run every hour
+    - cron: '0 * * * *'   # Run every hour
   workflow_dispatch:
 
 jobs:
   wordpress-hunter:
     runs-on: ubuntu-latest
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-    - name: Update system Tools
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y libpcap-dev curl
-        
-        # Verify libpcap is installed
-        dpkg -L libpcap-dev | grep pcap.h || true
+      - name: Update system Tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libpcap-dev curl
+          dpkg -L libpcap-dev | grep pcap.h || true
 
-    - name: Download and split wildcards
-      run: |
-        pwd && ls
-        # Download the file
-        wget https://raw.githubusercontent.com/d4rk5id3r/Recon/refs/heads/main/wildcards.txt -O wildcards.txt
+      - name: Download and split wildcards
+        run: |
+          wget https://raw.githubusercontent.com/d4rk5id3r/Recon/refs/heads/main/wildcards.txt -O wildcards.txt
 
-        # Count total lines
-        total_lines=$(wc -l < wildcards.txt)
-        echo "Total lines: $total_lines"
+          total_lines=$(wc -l < wildcards.txt)
+          per_file=$(( (total_lines + 4) / 5 ))
 
-        # Calculate lines per file (rounded up to split into 5 files)
-        per_file=$(( (total_lines + 4) / 5 ))
-        echo "Lines per file: $per_file"
+          split -l "$per_file" -d --additional-suffix=.txt wildcards.txt part
 
-        # Split into temporary files: part00.txt, part01.txt, ..., part04.txt
-        split -l "$per_file" -d --additional-suffix=.txt wildcards.txt part
+          for i in {0..4}; do
+            num=$(printf "%02d" "$i")
+            mv "part${num}.txt" "wildcards$((i+1)).txt"
+          done
 
-        # Rename part00.txt to wildcards1.txt, ..., part04.txt to wildcards5.txt
-        for i in {0..4}; do
-          num=$(printf "%02d" "$i")
-          mv "part${num}.txt" "wildcards$((i+1)).txt"
-        done
+      - name: Upload wildcards as artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: wildcards
+          path: wildcards*.txt
 
-        # List resulting files
-        ls -l wildcards*.txt
-
-    
   deploy:
     runs-on: ubuntu-latest
     needs: wordpress-hunter
@@ -55,6 +46,13 @@ jobs:
         file: [wildcards1.txt, wildcards2.txt, wildcards3.txt, wildcards4.txt, wildcards5.txt]
     steps:
       - uses: actions/checkout@v4
+
+      - name: Download wildcards artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: wildcards
+          path: .
+
       - name: Run tests
         run: |
           pwd && ls 
@@ -65,7 +63,6 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y libpcap-dev curl
-          # Verify libpcap is installed
           dpkg -L libpcap-dev | grep pcap.h || true
 
       - name: Clone repository
@@ -75,8 +72,12 @@ jobs:
         run: sleep 10
 
       - name: Load wildcards and run subfinder
-        run:  cd Recon && pwd && ls -la && chmod +x wildcards.sh && ./wildcards.sh ${{ matrix.file }} subs-found${{ matrix }}.txt
+        run: |
+          cd Recon
+          chmod +x wildcards.sh
+          ./wildcards.sh ../${{ matrix.file }} subs-found-${{ matrix.file }}.txt
 
       - name: Probe domains with httprobe
-        run: cd Recon && cat subs-found${{ matrix }}.txt | httprobe > live_websites.txt 
-    
+        run: |
+          cd Recon
+          cat subs-found-${{ matrix.file }}.txt | httprobe > live_websites.txt
