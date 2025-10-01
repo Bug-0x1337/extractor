@@ -22,7 +22,7 @@ jobs:
 
     - name: Download wildcards
       run: |
-       curl -o wildcards.txt https://raw.githubusercontent.com/d4rk5id3r/Recon/wildcards.txt
+       curl -o wildcards.txt https://raw.githubusercontent.com/d4rk5id3r/Recon/refs/heads/main/wildcards.txt
        # Count total lines
           total_lines=$(wc -l < data.txt)
           echo "Total lines: $total_lines"
@@ -51,6 +51,13 @@ jobs:
         run: |
           echo "Running tests with ${{ matrix.file }}..."
           cat ${{ matrix.file }}
+
+      - name: Update system Tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libpcap-dev curl
+          # Verify libpcap is installed
+          dpkg -L libpcap-dev | grep pcap.h || true
 
       - name: Clone repository
         run: git clone https://github.com/d4rk5id3r/Recon
