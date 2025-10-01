@@ -44,7 +44,10 @@ jobs:
       run: sleep 10
 
     - name: Load wildcards and run subfinder
-      run:  cd Recon && pwd && ls -la && chmod +x wildcards.sh && ./wildcards.sh wildcards.txt subs-found.txt && cat subs-found.txt >> domains.txt
+      run:  cd Recon && pwd && ls -la && chmod +x wildcards.txt && ./wildcards.sh wildcards.txt subs-found.txt && cat subs-found.txt >> domains.txt && cat domains.txt
+    
+    - name: Probe domains with httpx
+      run: cd Recon && cat domains.txt | httpx -ports 80,443,8080,8000,8888 -threads 200 > subdomains_alive.txt 
 
     - name: Fingerprint for Wordpress servers
       run: pwd  && cd Recon && pwd
@@ -53,4 +56,3 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: report
-          
