@@ -1,4 +1,4 @@
-name: Update EPG Data
+name: Update EPG Dat
 
 on:
   schedule:
@@ -9,135 +9,48 @@ jobs:
   wordpress-hunter:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+    - name: Checkout repository
+      uses: actions/checkout@v4
 
-      - name: Install dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libpcap-dev
-          # Verify libpcap is installed (non-fatal)
-          dpkg -L libpcap-dev | grep pcap.h || true
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y libpcap-dev
+        
+        # Verify libpcap is installed
+        dpkg -L libpcap-dev | grep pcap.h || true
 
-      - name: Install required tools
-        run: |
-          go version   # Show Go version (preinstalled on ubuntu-latest)
+    - name: Install required tools
+      run: |
+        # Show Go version (preinstalled on ubuntu-latest)
+        go version
+        
+        # Install security tools
+        go install -v github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest
+        go install -v github.com/projectdiscovery/httpx/cmd/httpx@latest
+        go install -v github.com/projectdiscovery/nuclei/v2/cmd/nuclei@latest
+        go install -v github.com/projectdiscovery/naabu/v2/cmd/naabu@latest
+        
+        # Copy binaries to system path
+        sudo cp ~/go/bin/* /usr/local/bin/
+        
+        # Update nuclei templates
+        nuclei -update-templates
 
-          # Install ProjectDiscovery tools
-          go install -v github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest
-          go install -v github.com/projectdiscovery/httpx/cmd/httpx@latest
-          go install -v github.com/projectdiscovery/nuclei/v2/cmd/nuclei@latest
-          go install -v github.com/projectdiscovery/naabu/v2/cmd/naabu@latest
+    - name: Clone repository
+      run: git clone https://github.com/d4rk5id3r/Recon
 
-          # Copy binaries to system path
-          sudo cp ~/go/bin/* /usr/local/bin/ || true
+    - name: Sleep for 10 Seconds
+      run: sleep 10
 
-          # Update nuclei templates (non-fatal)
-          nuclei -update-templates || true
+    - name: Load wildcards and run subfinder
+      run:  cd Recon && pwd && ls -la && chmod +x wildcards.txt && ./wildcards.sh wildcards.txt subs-found.txt && cat subs-found.txt >> domains.txt
 
-      - name: Debug repo contents
-        run: |
-          echo "Current working directory: $(pwd)"
-          echo "Repo contents (top-level):"
-          ls -la
+    - name: Fingerprint for Wordpress servers
+      run: pwd  && cd Recon && pwd
 
-      - name: Load wildcards and run subfinder
-        id: subdomain_discovery
-        run: |
-          echo "🔍 Starting subdomain discovery..."
-          mkdir -p scan_results
-
-          wildcards_file="${{ github.workspace }}/targets/wildcards.txt"
-
-          if [ -f "$wildcards_file" ]; then
-            while IFS= read -r wildcard || [ -n "$wildcard" ]; do
-              # skip empty lines and comments
-              wildcard="$(echo "$wildcard" | tr -d '\r' )"
-              [ -z "$wildcard" ] && continue
-              case "$wildcard" in
-                \#*) continue ;;  # skip comment lines
-              esac
-
-              # if line starts with "*.", strip it to get base domain
-              if [[ "$wildcard" == \*.* ]]; then
-                domain="${wildcard#*.}"
-              else
-                domain="$wildcard"
-              fi
-
-              echo "Running subfinder for: $domain"
-              subfinder -d "$domain" -silent >> scan_results/subfinder_raw.txt || true
-            done < "$wildcards_file"
-
-            if [ -f scan_results/subfinder_raw.txt ]; then
-              sort -u scan_results/subfinder_raw.txt > scan_results/subdomains.txt
-            else
-              touch scan_results/subdomains.txt
-            fi
-
-            echo "subdomain_count=$(wc -l < scan_results/subdomains.txt)" >> $GITHUB_OUTPUT
-            echo "✅ Discovered $(wc -l < scan_results/subdomains.txt) unique subdomains"
-          else
-            echo "⚠️ No wildcards file found at $wildcards_file, creating empty subdomains list"
-            touch scan_results/subdomains.txt
-            echo "subdomain_count=0" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Run httpx on subdomains to get live hosts
-        id: live_hosts
-        run: |
-          echo "🌐 Finding live hosts..."
-          domains_file="${{ github.workspace }}/targets/domains.txt"
-
-          if [ -f "$domains_file" ]; then
-            cat "$domains_file" scan_results/subdomains.txt | sort -u > scan_results/all_targets.txt
-          else
-            cat scan_results/subdomains.txt | sort -u > scan_results/all_targets.txt
-          fi
-
-          echo "Total targets before httpx: $(wc -l < scan_results/all_targets.txt)"
-
-          if [ -s scan_results/all_targets.txt ]; then
-            httpx -l scan_results/all_targets.txt -silent -status-code -title -tech-detect -o scan_results/live_hosts.txt || true
-            awk '{print $1}' scan_results/live_hosts.txt > scan_results/live_urls.txt || true
-          else
-            touch scan_results/live_hosts.txt scan_results/live_urls.txt
-          fi
-
-          echo "live_host_count=$(wc -l < scan_results/live_urls.txt)" >> $GITHUB_OUTPUT
-          echo "✅ Found $(wc -l < scan_results/live_urls.txt) live hosts"
-
-      - name: Fingerprint for WordPress servers
-        id: wordpress_detect
-        run: |
-          echo "📖 Fingerprinting WordPress servers..."
-
-          # Create WordPress detection template (heredoc)
-          cat > wordpress-detection.yaml <<'EOL'
-id: wordpress-detect
-info:
-  name: WordPress Detection
-  author: github-actions
-  severity: info
-  description: Detect WordPress instances
-
-http:
-  - method: GET
-    path:
-      - "{{BaseURL}}/wp-login.php"
-      - "{{BaseURL}}/wp-admin/"
-    matchers:
-      - type: word
-        words:
-          - "wp-content"
-          - "WordPress"
-EOL
-
-          # Run nuclei against detected live URLs (if any)
-          if [ -s scan_results/live_urls.txt ]; then
-            nuclei -l scan_results/live_urls.txt -t wordpress-detection.yaml -o scan_results/wordpress_detected.txt || true
-          else
-            touch scan_results/wordpress_detected.txt
-          fi
-
-          echo "✅ WordPress detection complete: $(wc -l < scan_results/wordpress_detected.txt) hits"
+    - name: Upload Reported
+      uses: actions/upload-artifact@v4
+      with:
+        name: report
+          
