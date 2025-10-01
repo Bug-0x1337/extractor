@@ -44,7 +44,7 @@ jobs:
       run: sleep 10
 
     - name: Load wildcards and run subfinder
-      run:  cd Recon && pwd && ls -la && chmod +x wildcards.txt && ./wildcards.sh wildcards.txt subs-found.txt && cat subs-found.txt >> domains.txt
+      run:  cd Recon && pwd && ls -la && chmod +x wildcards.sh && ./wildcards.sh wildcards.txt subs-found.txt && cat subs-found.txt >> domains.txt
 
     - name: Fingerprint for Wordpress servers
       run: pwd  && cd Recon && pwd
