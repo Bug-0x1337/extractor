@@ -24,7 +24,7 @@ jobs:
       run: |
        wget https://raw.githubusercontent.com/d4rk5id3r/Recon/refs/heads/main/wildcards.txt -O wildcards.txt
        # Count total lines
-          total_lines=$(wc -l < data.txt)
+          total_lines=$(wc -l < wildcards.txt)
           echo "Total lines: $total_lines"
           
           # Calculate lines per file (rounded up)
@@ -32,19 +32,19 @@ jobs:
           echo "Lines per file: $per_file"
           
           # Split into 5 files named data1.txt, data2.txt, ...
-          split -l $per_file -d --additional-suffix=.txt data.txt data
+          split -l $per_file -d --additional-suffix=.txt wildcards.txt data
           
           # Rename split files to data1.txt, data2.txt, ...
           for i in {0..4}; do mv data0$i.txt data$((i+1)).txt; done
           
-          ls -l data*.txt
+          ls -l wildcards*.txt
     
   deploy:
     runs-on: ubuntu-latest
     needs: wordpress-hunter
     strategy:
       matrix:
-        file: [data1.txt, data2.txt, data3.txt, data4.txt, data5.txt]
+        file: [wildcards1.txt, wildcards2.txt, wildcards3.txt, wildcards4.txt, wildcards5.txt]
     steps:
       - uses: actions/checkout@v4
       - name: Run tests
