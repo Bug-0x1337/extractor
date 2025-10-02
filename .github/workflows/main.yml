@@ -48,7 +48,7 @@ jobs:
       run:  cd Recon && pwd && ls -la && chmod +x wildcards.sh && ./wildcards.sh wildcards.txt subs-found.txt
     
     - name: Probe domains with httprobe
-      run: cd Recon && cat subs-found.txt | httprobe -c 100 > live_websites.txt
+      run: cd Recon && cat subs-found.txt | httprobe -c 500 > live_websites.txt
       
     - name: Fingerprint for Wordpress servers
       run: pwd  && cd Recon && pwd && nuclei -l live_websites.txt -t /home/runner/work/extractor/extractor/Recon/version-detect.yaml -o results.txt
