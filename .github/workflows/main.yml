@@ -68,13 +68,20 @@ jobs:
       
       - name: Install required tools
         run: |
+          # Show Go version (preinstalled on ubuntu-latest)
           go version
+          
+          # Install security tools
           go install -v github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest
           go install -v github.com/projectdiscovery/httpx/cmd/httpx@latest
           go install -v github.com/projectdiscovery/nuclei/v2/cmd/nuclei@latest
           go install -v github.com/projectdiscovery/naabu/v2/cmd/naabu@latest
           go install github.com/tomnomnom/httprobe@latest
+          
+          # Copy binaries to system path
           sudo cp ~/go/bin/* /usr/local/bin/
+          
+          # Update nuclei templates
           nuclei -update-templates
 
       - name: Clone repository
@@ -92,19 +99,21 @@ jobs:
       - name: Probe domains with httprobe
         run: |
           cd Recon
+
+          # Extract the number from the matrix filename
           num=$(echo "${{ matrix.file }}" | grep -o '[0-9]\+')
+
           cat ../${{ matrix.file }} | httprobe > live_websites${num}.txt
 
       - name: Fingerprint for Wordpress servers
         run: |
-          num=$(echo "${{ matrix.file }}" | grep -o '[0-9]\+')
-          cd Recon
-          nuclei -l live_websites${num}.txt \
-                 -t /home/runner/work/extractor/extractor/Recon/version-detect.yaml \
-                 -o results${num}.txt
+         # Extract the number from the matrix filename
+         num=$(echo "${{ matrix.file }}" | grep -o '[0-9]\+')
 
+         pwd  && cd Recon && pwd && nuclei -l live_websites${num}.txt -t /home/runner/work/extractor/extractor/Recon/version-detect.yaml -o results${num}.txt
+      
       - name: Upload results as artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: results-${{ matrix.file }}
-          path: /home/runner/work/extractor/extractor/Recon/results${{ matrix.file | grep -o '[0-9]\+' }}.txt
+        name: results-${{ matrix.file }}
+        path: /home/runner/work/extractor/extractor/Recon/results*.txt
