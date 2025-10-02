@@ -92,9 +92,12 @@ jobs:
       - name: Probe domains with httprobe
         run: |
           cd Recon
-          num=$(echo "${{ matrix.file }}" | grep -o '[0-9]\+')
-          cat ../${{ matrix.file }} | httprobe > live_websites${num}.txt
 
+          # Extract the number from the matrix filename
+          num=$(echo "${{ matrix.file }}" | grep -o '[0-9]\+')
+
+          cat ../${{ matrix.file }} | httprobe > live_websites${num}.txt
+          
       - name: Fingerprint for Wordpress servers
         run: |
           num=$(echo "${{ matrix.file }}" | grep -o '[0-9]\+')
