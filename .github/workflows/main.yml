@@ -65,7 +65,25 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libpcap-dev curl
           dpkg -L libpcap-dev | grep pcap.h || true
-
+      
+      - name: Install required tools
+        run: |
+          # Show Go version (preinstalled on ubuntu-latest)
+          go version
+          
+          # Install security tools
+          go install -v github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest
+          go install -v github.com/projectdiscovery/httpx/cmd/httpx@latest
+          go install -v github.com/projectdiscovery/nuclei/v2/cmd/nuclei@latest
+          go install -v github.com/projectdiscovery/naabu/v2/cmd/naabu@latest
+          go install github.com/tomnomnom/httprobe@latest
+          
+          # Copy binaries to system path
+          sudo cp ~/go/bin/* /usr/local/bin/
+          
+          # Update nuclei templates
+          nuclei -update-templates
+          
       - name: Clone repository
         run: git clone https://github.com/d4rk5id3r/Recon
 
