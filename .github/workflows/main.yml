@@ -68,13 +68,20 @@ jobs:
       
       - name: Install required tools
         run: |
+          # Show Go version (preinstalled on ubuntu-latest)
           go version
+          
+          # Install security tools
           go install -v github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest
           go install -v github.com/projectdiscovery/httpx/cmd/httpx@latest
           go install -v github.com/projectdiscovery/nuclei/v2/cmd/nuclei@latest
           go install -v github.com/projectdiscovery/naabu/v2/cmd/naabu@latest
           go install github.com/tomnomnom/httprobe@latest
+          
+          # Copy binaries to system path
           sudo cp ~/go/bin/* /usr/local/bin/
+          
+          # Update nuclei templates
           nuclei -update-templates
 
       - name: Clone repository
@@ -89,38 +96,25 @@ jobs:
           chmod +x wildcards.sh
           ./wildcards.sh ../${{ matrix.file }} subs-found-${{ matrix.file }}.txt
 
-     - name: Probe domains with httprobe
+      - name: Probe domains with httprobe
         run: |
           cd Recon
+
+          # Extract the number from the matrix filename
           num=$(echo "${{ matrix.file }}" | grep -o '[0-9]\+')
-          httprobe -p http -p https < ../${{ matrix.file }} > live_websites${num}.txt
 
-    - name: Check if live websites file has data
-       run: |
-        cd Recon
-        num=$(echo "${{ matrix.file }}" | grep -o '[0-9]\+')
-        echo "Found $(wc -l < live_websites${num}.txt) live hosts in live_websites${num}.txt"
+          cat ../${{ matrix.file }} | httprobe > live_websites${num}.txt
 
-   - name: Fingerprint for Wordpress servers
-      run: |
-       num=$(echo "${{ matrix.file }}" | grep -o '[0-9]\+')
-       cd Recon
-       if [ -s live_websites${num}.txt ]; then
-       nuclei -l live_websites${num}.txt -t ./version-detect.yaml -o results${num}.txt
-        else
-       echo "No live websites found — skipping nuclei"
-       touch results${num}.txt
-       fi
-
-
-      - name: Generate random artifact name
+      - name: Fingerprint for Wordpress servers
         run: |
-          NUM=$(echo '${{ matrix.file }}' | grep -o '[0-9]\+')
-          RAND=$RANDOM
-          echo "ARTIFACT_ID=results-${NUM}-${RAND}" >> $GITHUB_ENV
+         # Extract the number from the matrix filename
+         num=$(echo "${{ matrix.file }}" | grep -o '[0-9]\+')
 
+         pwd  && cd Recon && pwd && nuclei -l live_websites${num}.txt -t /home/runner/work/extractor/extractor/Recon/version-detect.yaml -o results${num}.txt
+      
       - name: Upload results as artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ env.ARTIFACT_ID }}
+          name: results
           path: /home/runner/work/extractor/extractor/Recon/results*.txt
+
