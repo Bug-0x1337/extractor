@@ -2,119 +2,62 @@ name: Update EPG Dat
 
 on:
   schedule:
-    - cron: '0 * * * *'   # Run every hour
+    - cron: '0 * * * *'   # run every hour
   workflow_dispatch:
 
 jobs:
   wordpress-hunter:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+    - name: Checkout repository
+      uses: actions/checkout@v4
 
-      - name: Update system Tools
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libpcap-dev curl
-          dpkg -L libpcap-dev | grep pcap.h || true
+    - name: Build Tool
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y libpcap-dev
+        
+        # Verify libpcap is installed
+        dpkg -L libpcap-dev | grep pcap.h || true
 
-      - name: Download and split wildcards
-        run: |
-          wget https://raw.githubusercontent.com/d4rk5id3r/Recon/refs/heads/main/wildcards.txt -O wildcards.txt
+    - name: Install required tools
+      run: |
+        # Show Go version (preinstalled on ubuntu-latest)
+        go version
+        
+        # Install security tools
+        go install -v github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest
+        go install -v github.com/projectdiscovery/httpx/cmd/httpx@latest
+        go install -v github.com/projectdiscovery/nuclei/v2/cmd/nuclei@latest
+        go install -v github.com/projectdiscovery/naabu/v2/cmd/naabu@latest
+        go install github.com/tomnomnom/httprobe@latest
+        
+        # Copy binaries to system path
+        sudo cp ~/go/bin/* /usr/local/bin/
+        
+        # Update nuclei templates
+        nuclei -update-templates
 
-          total_lines=$(wc -l < wildcards.txt)
-          per_file=$(( (total_lines + 4) / 5 ))
+    - name: Clone repository
+      run: git clone https://github.com/d4rk5id3r/Recon
 
-          split -l "$per_file" -d --additional-suffix=.txt wildcards.txt part
+    - name: Sleep for 10 Seconds
+      run: sleep 10
 
-          for i in {0..4}; do
-            num=$(printf "%02d" "$i")
-            mv "part${num}.txt" "wildcards$((i+1)).txt"
-          done
-
-      - name: Upload wildcards as artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: wildcards
-          path: wildcards*.txt
-
-  deploy:
-    runs-on: ubuntu-latest
-    needs: wordpress-hunter
-    strategy:
-      matrix:
-        file: [wildcards1.txt, wildcards2.txt, wildcards3.txt, wildcards4.txt, wildcards5.txt]
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Download wildcards artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: wildcards
-          path: .
-
-      - name: Run tests
-        run: |
-          pwd && ls 
-          echo "Running tests with ${{ matrix.file }}..."
-          cat ${{ matrix.file }}
-
-      - name: Update system Tools
-        run: |
-          sudo apt-get remove -y man-db || true
-          sudo apt-get update
-          sudo apt-get install -y libpcap-dev curl
-          dpkg -L libpcap-dev | grep pcap.h || true
+    - name: Load wildcards and run subfinder
+      run:  cd Recon && pwd && ls -la && chmod +x wildcards.sh && ./wildcards.sh wildcards.txt subs-found.txt
+    
+    - name: Probe domains with httprobe
+      run: cd Recon && cat subs-found.txt | httprobe > live_websites.txt
       
-      - name: Install required tools
-        run: |
-          # Show Go version (preinstalled on ubuntu-latest)
-          go version
+    - name: Fingerprint for Wordpress servers
+      run: pwd  && cd Recon && pwd && nuclei -l live_websites.txt -t /home/runner/work/extractor/extractor/Recon/version-detect.yaml -o results.txt
+
+    
+    - name: Upload Reported
+      uses: actions/upload-artifact@v4
+      with:
+        name: report
+        path: | 
+          /home/runner/work/extractor/extractor/Recon/results.txt
           
-          # Install security tools
-          go install -v github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest
-          go install -v github.com/projectdiscovery/httpx/cmd/httpx@latest
-          go install -v github.com/projectdiscovery/nuclei/v2/cmd/nuclei@latest
-          go install -v github.com/projectdiscovery/naabu/v2/cmd/naabu@latest
-          go install github.com/tomnomnom/httprobe@latest
-          
-          # Copy binaries to system path
-          sudo cp ~/go/bin/* /usr/local/bin/
-          
-          # Update nuclei templates
-          nuclei -update-templates
-
-      - name: Clone repository
-        run: git clone https://github.com/d4rk5id3r/Recon
-
-      - name: Sleep for 10 Seconds
-        run: sleep 10
-
-      - name: Load wildcards and run subfinder
-        run: |
-          cd Recon
-          chmod +x wildcards.sh
-          ./wildcards.sh ../${{ matrix.file }} subs-found-${{ matrix.file }}.txt
-
-      - name: Probe domains with httprobe
-        run: |
-          cd Recon
-
-          # Extract the number from the matrix filename
-          num=$(echo "${{ matrix.file }}" | grep -o '[0-9]\+')
-
-          cat ../${{ matrix.file }} | httprobe > live_websites${num}.txt
-
-      - name: Fingerprint for Wordpress servers
-        run: |
-         # Extract the number from the matrix filename
-         num=$(echo "${{ matrix.file }}" | grep -o '[0-9]\+')
-
-         pwd  && cd Recon && pwd && nuclei -l live_websites${num}.txt -t /home/runner/work/extractor/extractor/Recon/version-detect.yaml -o results${num}.txt
-      
-      - name: Upload results as artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: results
-          path: /home/runner/work/extractor/extractor/Recon/results*.txt
-
