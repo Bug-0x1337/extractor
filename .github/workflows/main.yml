@@ -89,20 +89,29 @@ jobs:
           chmod +x wildcards.sh
           ./wildcards.sh ../${{ matrix.file }} subs-found-${{ matrix.file }}.txt
 
-      - name: Probe domains with httprobe
+     - name: Probe domains with httprobe
         run: |
           cd Recon
-
-          # Extract the number from the matrix filename
           num=$(echo "${{ matrix.file }}" | grep -o '[0-9]\+')
+          httprobe -p http -p https < ../${{ matrix.file }} > live_websites${num}.txt
 
-          cat ../${{ matrix.file }} | httprobe > live_websites${num}.txt
-          
-      - name: Fingerprint for Wordpress servers
-        run: |
-          num=$(echo "${{ matrix.file }}" | grep -o '[0-9]\+')
-          cd Recon
-          nuclei -l live_websites${num}.txt -t /home/runner/work/extractor/extractor/Recon/version-detect.yaml -o results${num}.txt
+    - name: Check if live websites file has data
+       run: |
+        cd Recon
+        num=$(echo "${{ matrix.file }}" | grep -o '[0-9]\+')
+        echo "Found $(wc -l < live_websites${num}.txt) live hosts in live_websites${num}.txt"
+
+   - name: Fingerprint for Wordpress servers
+      run: |
+       num=$(echo "${{ matrix.file }}" | grep -o '[0-9]\+')
+       cd Recon
+       if [ -s live_websites${num}.txt ]; then
+       nuclei -l live_websites${num}.txt -t ./version-detect.yaml -o results${num}.txt
+        else
+       echo "No live websites found — skipping nuclei"
+       touch results${num}.txt
+       fi
+
 
       - name: Generate random artifact name
         run: |
